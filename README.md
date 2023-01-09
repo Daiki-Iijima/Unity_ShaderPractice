@@ -1,12 +1,45 @@
-# Shaderメモ
+# UnityのShaderについてのメモ
 
-マテリアルと1対１で結びつく
+## ツールバージョン
+
+- UnityEditor : 2021.3.16f1
+
+## マテリアル、シェーダー、テクスチャについて
+
+- シェーダーとマテリアルは1対1で結びついている
+- 同じシェーダーを別々のマテリアルが使用することもできる
 
 ```mermaid
 graph
 
-material --> Shader
+material1 --> Shader1
+material2 --> Shader1
+material3 --> Shader2
+material4 --> Shader3
 ```
+
+テクスチャについては、シェーダー内部で参照を持っているので、以下の図のような関係性になる。
+
+- テクスチャを持たないShaderももちろん作成可能
+
+```mermaid
+graph
+
+material1 --> Shader1 --> Texture
+
+```
+
+## Queueの描画順
+
+奥から、
+
+1. Background
+2. Geometry
+3. AlphaTest
+4. Transparent
+5. Overlay
+
+![DrawOrder](./Images/QueueDrawOrder.png)
 
 ## Shaderの種類
 
@@ -200,7 +233,110 @@ Shader "DShader/SimpleTransparent"
 
 - スクリプト
 
+Rendererコンポーネントを取得し、マテリアル経由で対象のメンバ変数に対して値を設定します。
+
 ```c#
-Get
+this.gameObject.GetComponent<Renderer>().material.SetColor("_BaseColor", Color.red);
 ```
 
+## 透過させる
+
+透過させるに注意するのは、
+
+- 描画順
+- 透過方法
+- 透過度
+
+になります。
+
+### 描画順
+
+`描画順`を考慮しないと、最終的な出力された絵がおかしなことになります。
+
+- 描画順を考慮しなかった場合
+
+  ```c#
+  SubShader
+  {
+    Tags { 
+       "Queue"="Background"
+    }
+    //  ...省略
+  ```
+
+   ![Background](./Images/Background.png)
+
+- 描画順を考慮した場合
+
+  ```c#
+  SubShader
+  {
+    Tags { 
+       "Queue"="Transparent"
+    }
+    //  ...省略
+  ```
+
+  ![Transparent](./Images/Transparent.png)
+
+上の例は極端な表現ですが、描画順を考慮しない場合の絵は何か違和感があるのがわかるかと思います。
+
+Shaderでは、描画順は、以下のように`"Queue"="XXX"`をTagに記述することでしていることができます。
+
+```c#
+SubShader
+{
+  //  タグの定義に追加します。
+  //  描画時にUnity側が確認して描画処理を最適化してくれます。
+  Tags { 
+    "Queue"="XXX"
+  }
+
+  //  ...省略
+```
+
+### 透過方法
+
+`透過方法`を指定する必要があります。
+
+
+- シンプルな透過シェーダー
+
+  ```c#
+  Shader "DShader/SimpleTransparent"
+  {
+    SubShader {
+      Tags { 
+        // QueueをTransparent(透過)にする
+        "Queue"="Transparent"
+      }
+      LOD 200
+
+      CGPROGRAM
+      //  fullforwrdを消してalpha:fadeを追加
+      #pragma surface surf Standard alpha:fade
+      #pragma target 3.0
+
+      struct Input {
+        float2 uv_MainTex;
+      };
+
+      float4 _BaseColor;
+
+      void surf (Input IN, inout SurfaceOutputStandard o) {
+        o.Albedo = fixed4(0.6f,0.7f,0.4f,1);
+        //  ここで透過度を設定している
+        o.Alpha = 0.6;
+      }
+      ENDCG
+    }
+    FallBack "Diffuse"
+  }
+  ```
+
+
+## 調べたい内容
+
+- [ ] pragmaの意味と、surfの宣言について
+  - https://unityshader.hatenablog.com/entry/2013/09/07/105000
+- 

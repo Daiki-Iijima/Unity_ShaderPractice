@@ -1,34 +1,27 @@
 Shader "DShader/SimpleTransparent"
 {
-  //  Parameters
-  Properties{
-  }
-  //  Parameters
-
   SubShader {
-    //  Shader Settings
     Tags { 
-      // RenderTypeをTransparent(透過)にする
-      "RenderType"="Opaque"
+      // QueueをTransparent(透過)にする
+      "Queue"="Transparent"
     }
     LOD 200
 
     CGPROGRAM
-    #pragma surface surf Standard fullforwardshadows
+    //  fullforwrdを消してalpha:fadeを追加
+    #pragma surface surf Standard alpha
     #pragma target 3.0
-    //  Shader Settings
 
-    //  前の工程(Vertex)のシェーダーからの情報を受け取る
     struct Input {
       float2 uv_MainTex;
     };
 
-    //  SubShader内でPropertiesの項目を使用できるようにするには、内部でも宣言する必要がある
     float4 _BaseColor;
 
-    // あとの工程(Lighting)に出力する
     void surf (Input IN, inout SurfaceOutputStandard o) {
-      o.Albedo = _BaseColor.rgb;
+      o.Albedo = fixed4(0.6f,0.7f,0.4f,1);
+      //  ここで透過度を設定している
+      o.Alpha = 0.6;
     }
     ENDCG
   }
