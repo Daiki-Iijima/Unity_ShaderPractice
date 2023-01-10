@@ -334,9 +334,32 @@ SubShader
   }
   ```
 
+## 透明度のグラデーション
 
-## 調べたい内容
+グラデーションということは、何かの値を基準に数値を変動させる必要があります。
+
+今回は、以下の動的に変化する情報を使用します。
+
+- 法線の向き
+- カメラの向き
+
+内積を使って、`モデルの法線の向き`と`カメラの向き`のベクトルがなす角度が`鈍角`か`鋭角`かを判定することができます。
+
+dot積の答えは、cosθになります。よって、2つのベクトルのなす角の違いによって以下の表の中のような値が取得できます。(1~0)
+
+![サインコサインタンジェント表](./Images/sine-cosine-tangent-table2.png)
+
+```c#
+float dot = dot(モデルのなす各)
+```
+
+## 今後調べたい内容
 
 - [ ] pragmaの意味と、surfの宣言について
-  - https://unityshader.hatenablog.com/entry/2013/09/07/105000
-- 
+  - [参考リンク(個人サイト)](https://unityshader.hatenablog.com/entry/2013/09/07/105000)
+- [ ] alpha:fade 周りのまとめ
+  - [参考リンク(Qiita)](https://qiita.com/keito_takaishi/items/a19b82d3d1395eaeaab9)
+
+## メインで参考にしているサイト
+
+- [7日間でマスターするUnityシェーダ入門](https://nn-hokuson.hatenablog.com/entry/2018/02/15/140037)
