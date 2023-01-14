@@ -334,27 +334,142 @@ SubShader
   }
   ```
 
-## 透明度のグラデーション
+## 視線座標とモデル法線の向きを使った氷表現、淡い表現
 
-グラデーションということは、何かの値を基準に数値を変動させる必要があります。
+Input構造体から取得できる情報として、以下の情報があります。
 
-今回は、以下の動的に変化する情報を使用します。
+- worldNormal : 法線の向き
+- viewDir :  カメラの向き
 
-- 法線の向き
-- カメラの向き
+これらの値を
 
-内積を使って、`モデルの法線の向き`と`カメラの向き`のベクトルがなす角度が`鈍角`か`鋭角`かを判定することができます。
+内積を使って、`モデルの法線の向き`と`カメラの向き`のベクトルがなす角度が何度(cosΘ)かがわかります。
 
-dot積の答えは、cosθになります。よって、2つのベクトルのなす角の違いによって以下の表の中のような値が取得できます。(1~0)
+- 内積を計算する場合は、ベクトルが正規化されている必要がありますが、今回使用するのは、法線と向きなので、正規化されているのでそのままの値を使用できます。
+
+```c#
+float cosTheta = dot(法線の向き,カメラの向き)
+```
+
+dot積の答えは、`cosθ`になります。よって、2つのベクトルのなす角の違いによって以下の表の中のような値が取得できます。(1~0)
 
 ![サインコサインタンジェント表](./Images/sine-cosine-tangent-table2.png)
 
+cosは、角度が狭ければ数値が大きく、角度が広ければ数値が小さくなります。
+
 ```c#
-float dot = dot(モデルのなす各)
+0° < 90°
+1.0  > 0.0
 ```
+
+## worldReflについて
+
+worldReflはInput構造体で前のパイプラインから受け取っていますが、自前で実装することもできます。
+
+以下のコードが自前で`worldRefl`を実装したものになります。
+
+```c#
+Shader "Test/ViewDirOriginalTest"
+{
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" }
+        LOD 200
+
+        CGPROGRAM
+        #pragma surface surf Standard fullforwardshadows
+
+        #pragma target 3.0
+
+        struct Input {
+            float3 worldNormal;
+            float3 viewDir;
+        };
+
+        UNITY_INSTANCING_BUFFER_START(Props)
+        UNITY_INSTANCING_BUFFER_END(Props)
+
+        void surf (Input IN, inout SurfaceOutputStandard o) {
+
+            float3 worldRefl = reflect(-IN.viewDir, IN.worldNormal);
+            //  viewDirの値と色を対応させてデバッグ
+            //  (X,Y,Z) = (R,G,B)
+            float r = worldRefl.x * 10;
+            float g = worldRefl.y * 10;
+            float b = worldRefl.z * 10;
+
+            o.Albedo = float4(r,g,b,1);
+        }
+
+        ENDCG
+    }
+    FallBack "Diffuse"
+}
+```
+
+IN.worldNormal が面がどちらの方向を向いているかに大きくかかわっている事は一目瞭然です。
+
+試しに、コレを 0 に置き換えてみます。
+
+## viewDirについて
+
+Input構造体に入ってくるviewDirの値は、`shaderが当たったオブジェクトの各面`から見て、どの方向にカメラがあるかという値が入ってきます。(Dirなので単位ベクトル)
+
+```c#
+viewDir = (カメラワールド座標 - shaderが当たっているオブジェクトワールド座標).normalized
+```
+
+- 検証コード
+
+  ```c#
+  Shader "Test/ViewDirTest"
+  {
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" }
+        LOD 200
+
+        CGPROGRAM
+        #pragma surface surf Standard fullforwardshadows
+
+        #pragma target 3.0
+
+        struct Input
+        {
+            float3 viewDir;
+        };
+
+
+        UNITY_INSTANCING_BUFFER_START(Props)
+        UNITY_INSTANCING_BUFFER_END(Props)
+
+        void surf (Input IN, inout SurfaceOutputStandard o)
+        {
+            //  viewDirの値と色を対応させてデバッグ
+            //  (X,Y,Z) = (R,G,B)
+            o.Albedo = float4(IN.viewDir,1);
+        }
+        ENDCG
+    }
+    FallBack "Diffuse"
+  }
+  ```
+
+ここで重要なのが、`どの方向`にというところで、`カメラ自体の角度`は関係ないことです。位置に対しての値なので、カメラが同じ位置から見る角度を変えても、`viewDir`の値は変化しません。
+
+viewDirをAlbedoに直接代入した時の色の変化が下の画像になります。
+
+- ()内の数字は、オブジェクトとカメラの中心位置からのviewDirです。モデルの端に行けば行くほど、値がゆっくり変化していきます。
+
+![viewDir比較画像](./Images/viewDir%E3%81%AE%E6%AF%94%E8%BC%83%E7%94%BB%E5%83%8F.png)
+
+- (R,G,B) = (X,Y,Z)の割り当てになっています。
+
+- 赤い四角が原点(0,0,0)ですが、色の変化を見ても、原点位置から見ると一方こうにしか動いていないのに、色の変化が激しいことがわかります。このことからも、viewDirが`shaderが当たったオブジェクトの各面`からみての座標ということがわかるかと思います。
 
 ## 今後調べたい内容
 
+- [ ] Input構造体の情報の変化について
 - [ ] pragmaの意味と、surfの宣言について
   - [参考リンク(個人サイト)](https://unityshader.hatenablog.com/entry/2013/09/07/105000)
 - [ ] alpha:fade 周りのまとめ
