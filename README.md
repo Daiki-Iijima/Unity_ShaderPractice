@@ -373,7 +373,7 @@ cosΘ : 1.0  > 0.0
 
 以下はベクトルを可視化した図です。
 
-![dotのイメージ](./Images/ドットのイメージ.png)
+![dotのイメージ](./Images/dot%E3%81%AE%E3%82%A4%E3%83%A1%E3%83%BC%E3%82%B8.png)
 
 - 赤矢印 : viewDir
 - 緑矢印 : worldNormal
