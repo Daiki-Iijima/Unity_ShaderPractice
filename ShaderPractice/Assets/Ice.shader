@@ -23,9 +23,9 @@ Shader "DShader/Ice"
     void surf (Input IN, inout SurfaceOutputStandard o)
     {
       o.Albedo = fixed4(1, 1, 1, 1);
-      float alpha = 1 - (abs(dot(IN.viewDir, o.Normal)));
-      //float alpha = 1 - (abs(dot(IN.viewDir, IN.worldNormal)));
-      o.Alpha =  alpha;
+      float cosTheta = 1 - dot(IN.viewDir, IN.worldNormal);
+      cosTheta = pow(cosTheta,2);
+      o.Alpha = cosTheta;
     }
     ENDCG
   }
