@@ -1,8 +1,12 @@
 # UnityのShaderについてのメモ
 
+---
+
 ## ツールバージョン
 
 - UnityEditor : 2021.3.16f1
+
+---
 
 ## マテリアル、シェーダー、テクスチャについて
 
@@ -29,6 +33,8 @@ material1 --> Shader1 --> Texture
 
 ```
 
+---
+
 ## Queueの描画順
 
 奥から、
@@ -40,6 +46,8 @@ material1 --> Shader1 --> Texture
 5. Overlay
 
 ![DrawOrder](./Images/QueueDrawOrder.png)
+
+---
 
 ## Shaderの種類
 
@@ -67,6 +75,8 @@ material1 --> Shader1 --> Texture
 Shader について
 
 - [Shader の種類](http://neareal.com/2413/#vertexfragment)
+
+---
 
 ## Surface Shader
 
@@ -160,7 +170,9 @@ Surface Shaderには、`入力`と`出力`がある
   }
   ```
 
-### 入力
+---
+
+## 入力
 
 - float3 viewDir - ビュー方向を含みます。視差効果、リムライティングなどの計算に使用されます。
 - float4 with COLOR セマンティック - 補間された頂点ごとの色を含みます。
@@ -171,14 +183,16 @@ Surface Shaderには、`入力`と`出力`がある
 - float3 worldRefl; INTERNAL_DATA - サーフェスシェーダーが o.Normal に書き込む場合 のワールドの反射ベクトルを含みます。ピクセル法線マップに基づいて反射ベクトルを取得するには、WorldReflectionVector (IN, o.Normal) を使用します。例については、反射-Bumped シェーダーを参照してください。
 - float3 worldNormal; INTERNAL_DATA - サーフェスシェーダーが o.Normal に書き込む場合 のワールドの反射ベクトルを含みます。ピクセル法線マップに基づいて法線ベクトルを取得するには、WorldNormalVector (IN, o.Normal) を使用します。
 
-### 外部からシェーダーのパラメーターを変更する
+---
+
+## 外部からシェーダーのパラメーターを変更する
 
 パラメーターを変更するには、2種類の方法があります。
 
 1. Inspectorから手動で変更する
 2. スクリプトからコードで変更する
 
-#### 1. Inspectorから手動で変更する
+### 1. Inspectorから手動で変更する
 
 Inspectorに表示する項目を`Parametersブロック`で定義する必要があります。
 
@@ -209,7 +223,7 @@ Shader "DShader/SimpleTransparent"
 }
 ```
 
-#### 2. スクリプトからコードで変更する
+### 2. スクリプトからコードで変更する
 
 Inspectorから設定しないのであれば、Propertiesブロックは不要で、Surfaceブロック内の定義のみで大丈夫です
 
@@ -246,6 +260,8 @@ Rendererコンポーネントを取得し、マテリアル経由で対象のメ
 ```c#
 this.gameObject.GetComponent<Renderer>().material.SetColor("_BaseColor", Color.red);
 ```
+
+---
 
 ## 透過させる
 
@@ -340,6 +356,8 @@ SubShader
     FallBack "Diffuse"
   }
   ```
+
+---
 
 ## 視線座標とモデル法線の向きを使って輪郭に行くにつれてエフェクトをかける
 
@@ -567,6 +585,8 @@ Shader "DShader/RimLighting"
 
 ![リムライトシェーダー](./Images/%E3%83%AA%E3%83%A0%E3%83%A9%E3%82%A4%E3%83%88%E5%BC%B7%E8%AA%BF%E7%89%88.png)
 
+---
+
 ## worldReflについて
 
 worldReflはInput構造体で前のパイプラインから受け取っていますが、自前で実装することもできます。
@@ -613,6 +633,8 @@ Shader "Test/ViewDirOriginalTest"
     FallBack "Diffuse"
 }
 ```
+
+---
 
 ## viewDirについて
 
