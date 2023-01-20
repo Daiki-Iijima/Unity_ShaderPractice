@@ -692,6 +692,416 @@ viewDirをAlbedoに直接代入した時の色の変化が下の画像になり�
 
 - 赤い四角が原点(0,0,0)ですが、色の変化を見ても、原点位置から見ると一方こうにしか動いていないのに、色の変化が激しいことがわかります。このことからも、viewDirが`shaderが当たったオブジェクトの各面`からみての座標ということがわかるかと思います。
 
+---
+
+## テクスチャを使用する
+
+_MainTexが外部からテクスチャの参照を受け取るので、受け取ったテクスチャをShader内部で、各ピクセルがInput構造体から受け取った自分の座標(uv_MainTex)をもとにテクスチャから適切な色をサンプリング(Textureから自分のテクスチャ座標の色を取得すること)します。
+
+```c#
+Shader "DShader/TextureShow"
+{
+    Properties
+    {
+        //  外部からテクスチャの参照を受け取る
+        _MainTex("テクスチャ", 2D) = "white"{}
+    }
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" }
+        LOD 200
+
+        CGPROGRAM
+        #pragma surface surf Standard fullforwardshadows
+        #pragma target 3.0
+
+        //  テクスチャ
+        sampler2D _MainTex;
+
+        struct Input
+        {
+            float2 uv_MainTex;
+        };
+
+        void surf (Input IN, inout SurfaceOutputStandard o)
+        {
+            //  tex2Dメソッドを使ってピクセルとテクセルを紐づける
+            o.Albedo = tex2D(_MainTex,IN.uv_MainTex);
+        }
+        ENDCG
+    }
+    FallBack "Diffuse"
+}
+```
+
+- [tex2Dについて : 公式ドキュメント](https://docs.unity3d.com/ja/2019.4/Manual/SL-SamplerStates.html)
+
+- [テクスチャの設定について :公式ドキュメント](https://docs.unity3d.com/ja/2019.4/Manual/class-TextureImporter.html)
+
+### テクスチャサンプラについて
+
+> 「テクスチャサンプラ」は入力されたテクスチャに各種フィルタを適用します。例えば線形補間フィルタは、テクスチャの拡大縮小時に中間的なテクスチャの色を線形補間します。その他の各種フィルタはD3DSAMPLERSTATETYPE 列挙型としてまとめられています。これにより、ピクセルシェーダは指定のテクスチャ座標（テクセル）に対して適切な色を取り出すことができるようになります。
+
+---
+
+## _MainTex以外の変数名にするとうまくテクスチャが表示されない
+
+Propertyの変数名を変えてみたらうまくテクスチャが表示されなくなったので、確認するべき点を以下に記す
+
+- プロパティで定義した`テクスチャ変数名(_xxx)`とInput構造体の`uv_xxx`のxxx部分が違う
+
+  - `_xxx`この名前でuv座標を取得しているので、以下の部分が同じ名前になっている確認する(最低3か所)
+
+  ```c#
+  Shader "DShader/TextureShow"
+  {
+      Properties
+      {
+          //  ここ(_xxx)
+          _Tex("テクスチャ", 2D) = "white"{}
+      }
+      SubShader
+      {
+          Tags { "RenderType"="Opaque" }
+          LOD 200
+
+          CGPROGRAM
+          #pragma surface surf Standard fullforwardshadows
+          #pragma target 3.0
+
+          //  ここ(_xxx)
+          sampler2D _Tex;
+
+          struct Input
+          {
+              //  ここ(uv_xxx)
+              float2 uv_Tex;
+          };
+
+          void surf (Input IN, inout SurfaceOutputStandard o)
+          {
+              o.Albedo = tex2D(_Tex,IN.uv_Tex);
+          }
+          ENDCG
+      }
+      FallBack "Diffuse"
+  }
+
+  ```
+
+もしこれでもうまくいかなかったら、以下のドキュメントを読んで`[MainTexture]`などが同じShader内で定義されていないかチェックする
+
+- 参考リンク : [ShaderProperty : Unity公式](https://docs.unity3d.com/ja/2019.4/Manual/SL-Properties.html)
+
+原文
+> [MainTexture] - indicates that a property is the main texture for a Material. By default, Unity considers a texture with the property name name _MainTex as the main texture. Use this attribute if your texture has a different property name, but you want Unity to consider it the main texture. If you use this attribute more than once, Unity uses the first property and ignores subsequent ones.
+
+日本語訳
+> [MainTexture] - プロパティがマテリアルのメイン テクスチャであることを示します。デフォルトでは、Unityはプロパティ名 _MainTexを持つテクスチャをメインテクスチャと見なします。このアトリビュートは、テクスチャのプロパティ名が異なるが、Unityにメインテクスチャと判断させたい場合に使用します。このアトリビュートを複数回使用した場合、Unityは最初のプロパティを使用し、それ以降のプロパティは無視されます。
+
+## テクスチャの特定の色だけ透過させる
+
+```c#
+Shader "DShader/TextureShowColorAlpha"
+{
+    Properties
+    {
+        _Tex("テクスチャ", 2D) = "white"{}
+        _AlphaColor("透過色",Color) = (1,1,1,1)
+        _AlphaThreshold("透過閾値",float) = 0.1
+    }
+    SubShader
+    {
+        Tags { "Queue"="Transparent" }
+        LOD 200
+
+        CGPROGRAM
+        #pragma surface surf Standard alpha:fade
+        #pragma target 3.0
+
+        //  テクスチャ
+        sampler2D _Tex;
+        float4 _AlphaColor;
+        float _AlphaThreshold;
+
+        struct Input
+        {
+            float2 uv_Tex;
+        };
+
+        void surf (Input IN, inout SurfaceOutputStandard o)
+        {
+            float4 color = tex2D(_Tex,IN.uv_Tex);
+            o.Albedo = color.rgb;
+
+            float diffR = abs(_AlphaColor.r - color.r);
+            float diffG = abs(_AlphaColor.g - color.g);
+            float diffB = abs(_AlphaColor.b - color.b);
+
+            o.Alpha = (
+            (diffR <= _AlphaThreshold) && 
+            (diffG <= _AlphaThreshold) && 
+            (diffB <= _AlphaThreshold)
+            ) ? 0.0f : 1.0f;
+        }
+        ENDCG
+    }
+    FallBack "Diffuse"
+}
+```
+
+- 注意
+  - 色の指定はカラーピッカーなどでやるとレンダリング後の色と、テクスチャの色が違う(影などの計算で)可能性があるので、テクスチャで使用した色を指定した方がいい
+
+## UVスクロールを使って背景を動かす
+
+Shaderは内部で状態を保持できないので、Unity側が用意している、`_Time変数`を使用して、状態を変化させていきます。
+
+```c#
+Shader "DShader/TextureUvScroll"
+{
+    Properties
+    {
+        _MainTex ("テクスチャ", 2D) = "white" {}
+        _XScrollSpeed("スクロールスピードX",float) = 1
+        _YScrollSpeed("スクロールスピードY",float) = 1
+    }
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" }
+        LOD 200
+
+        CGPROGRAM
+        #pragma surface surf Standard fullforwardshadows
+        #pragma target 3.0
+
+        sampler2D _MainTex;
+        float _XScrollSpeed;
+        float _YScrollSpeed;
+
+        struct Input
+        {
+            float2 uv_MainTex;
+        };
+
+        void surf (Input IN, inout SurfaceOutputStandard o)
+        {
+            float2 uv = IN.uv_MainTex;
+
+            // 経過時間分uvを移動させる
+            uv.x += _XScrollSpeed * _Time.y;
+            uv.y += _YScrollSpeed * _Time.y;
+
+            //  時間分動かした地点のテクスチャの色を取得
+            fixed4 c = tex2D (_MainTex, uv);
+            o.Albedo = c;
+        }
+        ENDCG
+    }
+    FallBack "Diffuse"
+}
+```
+
+- 実行結果
+  ![UVスクロール結果](./Images/UV%E3%82%B9%E3%82%AF%E3%83%AD%E3%83%BC%E3%83%AB%E7%B5%90%E6%9E%9C.gif)
+
+### _Time変数について
+
+_Time変数は、`シーンのロード時点からの経過時間`が取得できます。
+
+float4型になっていますが、`xyzwに以下数値倍した時間の数値`が入っています。
+
+- x : 1/20
+- y : 1
+- z : 2
+- w : 3
+
+[ShaderLab built-in values : 公式ドキュメント](https://docs.unity3d.com/460/Documentation/Manual/SL-BuiltinValues.html)
+
+## マスク画像を使った表現
+
+特定の部分だけくりぬいたり、逆に特定の部分だけを隠す処理を行うことができる
+
+### マスク画像とは
+
+グレースケールという色の黒から白までの256段階の色で作成された画像になります。
+
+どんな色付きの画像でも、グレースケールに変換できます。
+
+- 変換式
+
+  ```c#
+  グレースケール値 = (Red * 0.3) + (Green * 0.59) + (Blue * 0.11)
+    ```
+
+### 使い道
+
+#### 1. テクスチャの特定の部分だけを透過する
+
+マスク画像を追加で用意する必要がありますが、それだけ用意できれば、いろいろなテクスチャに簡単に対応することができます。
+
+```c#
+Shader "DShader/MaskAlpha"
+{
+    Properties
+    {
+        _MainTex ("メインテクスチャ", 2D) = "white" {}
+        _MaskTex ("マスクテクスチャ", 2D) = "white" {}
+        _Alpha("透明度",float) = 1
+        _MaskThreshold("マスクの閾値",float) = 1
+    }
+    SubShader
+    {
+        Tags { "Queue"="Transparent" }
+        LOD 200
+
+        CGPROGRAM
+        // Physically based Standard lighting model, and enable shadows on all light types
+        #pragma surface surf Standard alpha:fade
+
+        // Use shader model 3.0 target, to get nicer looking lighting
+        #pragma target 3.0
+
+        sampler2D _MainTex;
+        sampler2D _MaskTex;
+        float _Alpha;
+        float _MaskThreshold;
+
+        struct Input
+        {
+            float2 uv_MainTex;
+        };
+
+        void surf (Input IN, inout SurfaceOutputStandard o)
+        {
+            //  各テクスチャの色をテクスチャ座標をもとに抽出
+            fixed4 mainTex = tex2D (_MainTex, IN.uv_MainTex);
+            fixed4 maskTex = tex2D (_MaskTex, IN.uv_MainTex);
+
+            // 黒い部分を抜く 
+            // 黒は(0,0,0)なので、0を掛けることになり、0になり、出力される画像は黒塗りになります。
+            fixed4 c = mainTex;
+
+            //  マスク画像をもとに、色を設定する
+            if(maskTex.x < _MaskThreshold && maskTex.y < _MaskThreshold && maskTex.z < _MaskThreshold){
+                o.Alpha = _Alpha;
+                }else{
+                o.Alpha = 1.0f;
+            }
+
+            o.Albedo = c;
+        }
+        ENDCG
+    }
+    FallBack "Diffuse"
+}
+```
+
+手順としては、以下のような流れになります。
+
+1. メインテクスチャ、マスク画像を受け取る
+2. UV座標から、メインテクスチャ、マスクテクスチャのテクセルの色情報を取得する
+3. 取得したマスク情報をもとにそのテクセルに対しての処理を決める
+
+重要なのは、透過するテクセルかどうかをチェックしている以下の部分になります。
+
+```c#
+//  マスク画像をもとに、色を設定する
+if(maskTex.x < _MaskThreshold && maskTex.y < _MaskThreshold && maskTex.z < _MaskThreshold){
+    o.Alpha = _Alpha;
+}else{
+    o.Alpha = 1.0f;
+}
+```
+
+この判定処理を使うことで、ほかの表現にも応用することができます。
+
+- 透過前
+  ![透過前](./Images/%E9%80%8F%E9%81%8E%E5%89%8D.png)
+- 透過後 : 後ろにあるキューブが見えるようになりました。
+  ![透過後](./Images/%E9%80%8F%E9%81%8E%E5%BE%8C.png)
+
+### Mask画像を使ってテクスチャをブレンドする
+
+グレースケール画像を使用することで、256段階のグラデーションを表現することができるようになります。
+
+2つのテクスチャをグレースケールテクスチャの値をもとに、テクセルの色を変化させることで、テクスチャのグラデーションを作ることができるようになります。
+
+ここで`lerp関数`を使っているのは、グレースケールマスク画像に対応させて、テクスチャ切り替わりのグラデーション処理ができるようになります。
+
+- lerp関数の内部処理
+  - mainTex : メインのテクスチャの色(fixed4)
+  - subTex : サブのテクスチャの色(fixed4)
+  - mask : マスクの色(fixed4)
+
+  ```c#
+  color.r = mainTex.r * mask.r + subTex.r * (1-mask.r);
+  color.g = mainTex.g * mask.g + subTex.g * (1-mask.g);
+  color.b = mainTex.b * mask.b + subTex.b * (1-mask.b);
+  ```
+
+```c#
+Shader "DShader/TextureBrend"
+{
+    Properties
+    {
+        _MainTex ("メインテクスチャ", 2D) = "white" {}
+        _SubTex ("サブテクスチャ", 2D) = "white" {}
+        _MaskTex ("マスクテクスチャ", 2D) = "white" {}
+    }
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" }
+        LOD 200
+
+        CGPROGRAM
+        // Physically based Standard lighting model, and enable shadows on all light types
+        #pragma surface surf Standard fullforwardshadows
+
+        // Use shader model 3.0 target, to get nicer looking lighting
+        #pragma target 3.0
+
+        sampler2D _MainTex;
+        sampler2D _SubTex;
+        sampler2D _MaskTex;
+
+        struct Input
+        {
+            float2 uv_MainTex;
+        };
+
+        void surf (Input IN, inout SurfaceOutputStandard o)
+        {
+            //  各テクスチャの色をテクスチャ座標をもとに抽出
+            fixed4 mainTex = tex2D (_MainTex, IN.uv_MainTex);
+            fixed4 subTex = tex2D (_SubTex, IN.uv_MainTex);
+
+            fixed2 uv = IN.uv_MainTex;
+            uv.x += _Time.y;
+            fixed4 maskTex = tex2D (_MaskTex, uv);
+
+            //  ブレンド
+            fixed4 c = lerp(mainTex,subTex,maskTex);
+
+            o.Albedo = c;
+        }
+        ENDCG
+    }
+    FallBack "Diffuse"
+}
+
+```
+
+![テクスチャブレンドとuvスクロールの組み合わせ](./Images/%E3%83%86%E3%82%AF%E3%82%B9%E3%83%81%E3%83%A3%E3%83%96%E3%83%AC%E3%83%B3%E3%83%89%E3%81%A8uv%E3%82%B9%E3%82%AF%E3%83%AD%E3%83%BC%E3%83%AB%E3%81%AE%E7%B5%84%E3%81%BF%E5%90%88%E3%82%8F%E3%81%9B.gif)
+
+## 時計を作ってみる
+
+回転行列を作っていい感じにやらないといけないらしい
+
+今の知識では無理なので後回し
+
+[【Unity】【シェーダテクニック】テクスチャを回転させる](https://light11.hatenadiary.com/entry/2018/10/15/230527)
+
 ## 今後調べたい内容
 
 - [ ] Input構造体の情報の変化について
