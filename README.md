@@ -87,22 +87,9 @@ Shader について
 - 具体的に表現すると、`SurfaceOutputStandard`が次の処理(lighting)への参照になるので、次の処理へ渡す値を設定している
   - o.Albedo : この`o`が次の処理への参照変数なので、その変数の`Albedo`というメンバ変数を変更することで結果が変わるということになる。
 
-### SurfaceOutputStandardが持っている情報
+---
 
-```c#
-struct SurfaceOutputStandardSpecular
-{
-    fixed3 Albedo;      // ディフューズ色
-    fixed3 Specular;    // スペキュラー色
-    fixed3 Normal;      // 書き込まれる場合は、接線空間法線
-    half3 Emission;
-    half Smoothness;    // 0=粗い, 1=滑らか
-    half Occlusion;     // オクルージョン (デフォルト 1)
-    fixed Alpha;        // 透明度のアルファ
-};
-```
-
-### 色を決め打ちで設定しているShader
+## シンプルな方法でShaderの色を指定してみる
 
 このシェーダーは、外部から設定できる情報は何もなく、決められた色を表現するしかできないシンプルなシェーダー
 
@@ -172,11 +159,15 @@ Surface Shaderには、`入力`と`出力`がある
 
 ---
 
-## 入力
+## Input構造体について
 
 これらの入力は、基本的に、3Dモデルの1ピクセルごとに違う値が入ってきます。
 
 前の工程である程度計算されている場合もありますし、そのままの値が入ってくる場合もあります。
+
+具体的にどのような数値入力されているかについては、数値表示はできないので、色情報として表示しています。
+
+- Input構造体を色として表示しているShaderが入っているパス : `Assets/InputStructure/`
 
 | 変数名         | 型             | 解説                |
 |-------------|---------------|-------------------|
@@ -186,6 +177,22 @@ Surface Shaderには、`入力`と`出力`がある
 | worldPos    | float3        | ワールド空間上の座標          |
 | worldRefl   | float3        | ワールドの反射ベクトル       |
 | worldNormal | float3        | ワールド空間上の法線         |
+
+[viewDirの詳細について](#viewdirについて)
+
+---
+
+## SurfaceOutputStandardSpecularが持っている情報
+
+| 変数名        | 型      | 解説                 |
+|------------|--------|--------------------|
+| Albedo     | fixed3 | ディフューズ色            |
+| Specular   | fixed3 | スペキュラー色            |
+| Normal     | fixed3 | 書き込まれる場合は、接線空間法線   |
+| Emission   | half3  |                    |
+| Smoothness | half   | 0=粗い,1=滑らか         |
+| Occlusion  | half   | オクルージョン(デフォルト = 1) |
+| Alpha      | fixed  | 透明度のアルファ           |
 
 ---
 
@@ -640,7 +647,7 @@ Shader "Test/ViewDirOriginalTest"
 
 ---
 
-## viewDirについて
+## viewDirの詳細について
 
 Input構造体に入ってくるviewDirの値は、`shaderが当たったオブジェクトの各テクセル`から見て、どの方向にカメラがあるかという値が入ってきます。(Dirなので単位ベクトル)
 
@@ -1108,7 +1115,7 @@ Shader "DShader/TextureBrend"
 
 ## 今後調べたい内容
 
-- [ ] Input構造体の情報の変化について
+- [x] Input構造体の情報の変化について
 - [ ] pragmaの意味と、surfの宣言について
   - [参考リンク(個人サイト)](https://unityshader.hatenablog.com/entry/2013/09/07/105000)
 - [ ] alpha:fade 周りのまとめ
