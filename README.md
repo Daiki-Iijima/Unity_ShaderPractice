@@ -174,14 +174,18 @@ Surface Shaderには、`入力`と`出力`がある
 
 ## 入力
 
-- float3 viewDir - ビュー方向を含みます。視差効果、リムライティングなどの計算に使用されます。
-- float4 with COLOR セマンティック - 補間された頂点ごとの色を含みます。
-- float4 screenPos - 反射、または、スクリーンスペースエフェクトのためのスクリーンスペース位置を含みます。これは、GrabPass には適していないので注意してください。GrabPass のためにはComputeGrabScreenPos 関数でカスタム UV を算出する必要があります。
-- float3 worldPos - ワールド空間の位置を含みます。
-- float3 worldRefl - サーフェスシェーダーが o.Normal に書き込まない場合 のワールドの反射ベクトルを含みます。例については、反射―デフューズシェーダーを参照してください。
-- float3 worldNormal - サーフェスシェーダーが o.Normal に書き込まない場合 のワールドの法線ベクトルを含みます。
-- float3 worldRefl; INTERNAL_DATA - サーフェスシェーダーが o.Normal に書き込む場合 のワールドの反射ベクトルを含みます。ピクセル法線マップに基づいて反射ベクトルを取得するには、WorldReflectionVector (IN, o.Normal) を使用します。例については、反射-Bumped シェーダーを参照してください。
-- float3 worldNormal; INTERNAL_DATA - サーフェスシェーダーが o.Normal に書き込む場合 のワールドの反射ベクトルを含みます。ピクセル法線マップに基づいて法線ベクトルを取得するには、WorldNormalVector (IN, o.Normal) を使用します。
+これらの入力は、基本的に、3Dモデルの1ピクセルごとに違う値が入ってきます。
+
+前の工程である程度計算されている場合もありますし、そのままの値が入ってくる場合もあります。
+
+| 変数名         | 型             | 解説                |
+|-------------|---------------|-------------------|
+| viewDir     | float3        | カメラの向き            |
+| color       | float4(Color) | 前の工程で設定された色が入ってくる |
+| screenPos   | float4        | 画面上の位置            |
+| worldPos    | float3        | ワールド空間上の座標          |
+| worldRefl   | float3        | ワールドの反射ベクトル       |
+| worldNormal | float3        | ワールド空間上の法線         |
 
 ---
 
@@ -638,7 +642,7 @@ Shader "Test/ViewDirOriginalTest"
 
 ## viewDirについて
 
-Input構造体に入ってくるviewDirの値は、`shaderが当たったオブジェクトの各面`から見て、どの方向にカメラがあるかという値が入ってきます。(Dirなので単位ベクトル)
+Input構造体に入ってくるviewDirの値は、`shaderが当たったオブジェクトの各テクセル`から見て、どの方向にカメラがあるかという値が入ってきます。(Dirなので単位ベクトル)
 
 ```c#
 viewDir = (カメラワールド座標 - shaderが当たっているオブジェクトワールド座標).normalized
