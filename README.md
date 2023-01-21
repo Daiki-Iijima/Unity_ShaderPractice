@@ -1244,6 +1244,8 @@ Shader "DShader/Circle/MousePointDraw"
   - [【Unity】【シェーダテクニック】テクスチャを回転させる](https://light11.hatenadiary.com/entry/2018/10/15/230527)
 - [ ] レンダリングパイプラインについての解説をまとめる
   - [レンダリングパイプラインについて : Unity公式](https://docs.unity3d.com/ja/2022.1/Manual/BestPracticeLightingPipelines.html)
+- [ ] シェーダーのパラメーター構造体に書ける値についてまとめる
+  - [【シェーダー勉強④】Propertiesについて](https://artawa.hatenablog.com/entry/2020/08/30/200211)
 
 ## メインで参考にしているサイト
 
