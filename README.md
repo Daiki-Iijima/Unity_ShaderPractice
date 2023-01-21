@@ -1105,13 +1105,128 @@ Shader "DShader/TextureBrend"
 
 ![テクスチャブレンドとuvスクロールの組み合わせ](./Images/%E3%83%86%E3%82%AF%E3%82%B9%E3%83%81%E3%83%A3%E3%83%96%E3%83%AC%E3%83%B3%E3%83%89%E3%81%A8uv%E3%82%B9%E3%82%AF%E3%83%AD%E3%83%BC%E3%83%AB%E3%81%AE%E7%B5%84%E3%81%BF%E5%90%88%E3%82%8F%E3%81%9B.gif)
 
-## 時計を作ってみる
+## 円を描画してみる
 
-回転行列を作っていい感じにやらないといけないらしい
+TODO : 円の描画についての解説を記述
 
-今の知識では無理なので後回し
+```c#
+Shader "DShader/Circle/SimpleCircle"
+{
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 200
 
-[【Unity】【シェーダテクニック】テクスチャを回転させる](https://light11.hatenadiary.com/entry/2018/10/15/230527)
+    CGPROGRAM
+    #pragma surface surf Standard fullforwardshadows
+    #pragma target 3.0
+
+    struct Input
+    {
+      float3 worldPos;
+    };
+
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      //  ワールド座標の0,0,0からの距離を計算しているので、modelの座標を0,0,0付近においておく必要がある。
+      float dist = distance(fixed3(0,0,0),IN.worldPos);
+
+        //  ベースカラーを描画
+        o.Albedo = float4(1,1,1,1);
+
+      //  半径以内の場合、色を変更
+      if(dist <= 1){
+        o.Albedo = float4(1,0,0,1);
+      }
+
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+
+```
+
+### マウス座標の周辺の色を円形に変更する
+
+これを実現するには、C#のスクリプトを書く必要があります。
+
+```c#
+using UnityEngine;
+
+public class MousePointDraw : MonoBehaviour {
+    [SerializeField] private GameObject targetObj;
+
+    void Start() {
+    }
+
+    void Update() {
+
+        //  オブジェクトにRayを飛ばす
+        //  マウスの座標を取得
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit, 300.0f)) {
+            targetObj.GetComponent<Renderer>().material.SetFloat("_ClickPosX", hit.point.x);
+            targetObj.GetComponent<Renderer>().material.SetFloat("_ClickPosY", hit.point.y);
+            targetObj.GetComponent<Renderer>().material.SetFloat("_ClickPosZ", hit.point.z);
+        }
+
+    }
+}
+```
+
+```c#
+Shader "DShader/Circle/MousePointDraw"
+{
+  Properties
+  {
+    _Radius("円の半径",Float) = 0
+    _ClickPosX("クリック位置X",Float) = 0
+    _ClickPosY("クリック位置Y",Float) = 0
+    _ClickPosZ("クリック位置Z",Float) = 0
+  }
+
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 200
+
+    CGPROGRAM
+    #pragma surface surf Standard fullforwardshadows
+    #pragma target 3.0
+
+    float _Radius;
+    float _ClickPosX;
+    float _ClickPosY;
+    float _ClickPosZ;
+
+    struct Input
+    {
+      float3 worldPos;
+    };
+
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      //  マウスが現在ある地点からピクセルまでの距離を計算
+      float dist = distance(float3(_ClickPosX,_ClickPosY,_ClickPosZ),IN.worldPos);
+
+      //  ベースの色をつける
+      o.Albedo = float4(1,0,0,1);
+
+      //  距離が指定した半径以内の場合、色を変更する
+      if(dist <= _Radius){
+        o.Albedo = float4(1,1,1,1);
+      }
+
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+```
+
+![マウス座標シェーダー](./Images/%E3%83%9E%E3%82%A6%E3%82%B9%E5%BA%A7%E6%A8%99%E3%82%B7%E3%82%A7%E3%83%BC%E3%83%80%E3%83%BC.gif)
 
 ## 今後調べたい内容
 
@@ -1123,6 +1238,12 @@ Shader "DShader/TextureBrend"
 - [ ] shaderで`saturate()`と`abs`を使う意味
   - [Unity Shader で 0~ 1 の値を扱う際の雑メモ](https://kumak1.hatenablog.com/entry/2019/11/24/144115)
   - [リムライティング #8(記事の真ん中あたりに、saturate()の解説 + absとsaturate、結局カメラから裏見えないからどっちでも良い？)](https://soramamenatan.hatenablog.com/entry/2019/07/07/142908)
+- [ ] 時計を作ってみる
+  - 回転行列を作っていい感じにやらないといけないらしい
+  - 今の知識では無理なので後回し
+  - [【Unity】【シェーダテクニック】テクスチャを回転させる](https://light11.hatenadiary.com/entry/2018/10/15/230527)
+- [ ] レンダリングパイプラインについての解説をまとめる
+  - [レンダリングパイプラインについて : Unity公式](https://docs.unity3d.com/ja/2022.1/Manual/BestPracticeLightingPipelines.html)
 
 ## メインで参考にしているサイト
 
