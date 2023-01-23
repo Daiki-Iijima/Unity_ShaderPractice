@@ -1107,9 +1107,22 @@ Shader "DShader/TextureBrend"
 
 ## 円を描画してみる
 
-TODO : 円の描画についての解説を記述
+円を描画するには、中心地点と中心地点からの距離が必要になります。
 
-```c#
+以下のコードでは、
+
+- 中心地点 : 0,0,0 (ワールド座標)
+- 中心地点からの距離 : distance(中心地点,IN.worldPos)
+  - distance : 2点間の距離を求めます(fixed3)
+  - IN.worldPos : ピクセルのワールド座標
+
+以下の画像のような黒い円の範囲内にピクセルがある場合、ピクセルの色を変更する処理を入れることで、円を描画する事ができます。
+
+![円イメージ](./Images/%E5%86%86%E3%82%A4%E3%83%A1%E3%83%BC%E3%82%B8.png)
+
+この考え方をシェーダーで表現すると以下のようになります。
+
+```C#
 Shader "DShader/Circle/SimpleCircle"
 {
   SubShader
@@ -1131,25 +1144,23 @@ Shader "DShader/Circle/SimpleCircle"
       //  ワールド座標の0,0,0からの距離を計算しているので、modelの座標を0,0,0付近においておく必要がある。
       float dist = distance(fixed3(0,0,0),IN.worldPos);
 
-        //  ベースカラーを描画
-        o.Albedo = float4(1,1,1,1);
+      //  ベースカラーを描画
+      o.Albedo = float4(1,1,1,1);
 
       //  半径以内の場合、色を変更
       if(dist <= 1){
         o.Albedo = float4(1,0,0,1);
       }
-
     }
     ENDCG
   }
   FallBack "Diffuse"
 }
-
 ```
 
 ### マウス座標の周辺の色を円形に変更する
 
-これを実現するには、C#のスクリプトを書く必要があります。
+ShaderLab単体では、マウスの座標を取得することができません。なので、C#スクリプトから、Shaderにマウス座標を渡す必要があります。
 
 ```c#
 using UnityEngine;
@@ -1228,6 +1239,28 @@ Shader "DShader/Circle/MousePointDraw"
 
 ![マウス座標シェーダー](./Images/%E3%83%9E%E3%82%A6%E3%82%B9%E5%BA%A7%E6%A8%99%E3%82%B7%E3%82%A7%E3%83%BC%E3%83%80%E3%83%BC.gif)
 
+### 円をリングにして動かしてかっこよくする
+
+TODO : まとめる
+
+```c#
+// Ringシェーダー
+```
+
+![リング動きシェーダー]()
+
+## 半径の謎
+
+原点から、ピクセルまでの距離を`distance関数`で算出して、その距離を利用した処理をShaderで書こうとしたが、距離の値がおかしかった。
+
+### 原因
+
+キューブを使っていたので、3次元分の高さを考慮していなかった
+
+キューブの座標を0,0,0にしてもスケールが1,1,1のようになっていれば、原点からの高さも入るので想定より表示されている面の距離は遠くなる
+
+![半径の謎の答え](./Images/%E5%8D%8A%E5%BE%84%E3%81%AE%E8%AC%8E%E3%81%AE%E7%AD%94%E3%81%88.gif)
+
 ## 今後調べたい内容
 
 - [x] Input構造体の情報の変化について
@@ -1246,6 +1279,9 @@ Shader "DShader/Circle/MousePointDraw"
   - [レンダリングパイプラインについて : Unity公式](https://docs.unity3d.com/ja/2022.1/Manual/BestPracticeLightingPipelines.html)
 - [ ] シェーダーのパラメーター構造体に書ける値についてまとめる
   - [【シェーダー勉強④】Propertiesについて](https://artawa.hatenablog.com/entry/2020/08/30/200211)
+- [ ] シェーダーで組み込み関数についてまとめる
+  - DirectX HLSLの組み込み関数が一通り使えるっぽい
+  - [組み込み関数(DirectX HLSL)](https://hlslref.wiki.fc2.com/)
 
 ## メインで参考にしているサイト
 
