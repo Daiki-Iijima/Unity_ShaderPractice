@@ -1241,13 +1241,86 @@ Shader "DShader/Circle/MousePointDraw"
 
 ### 円をリングにして動かしてかっこよくする
 
-TODO : まとめる
+動かすということは、Shaderは内部で状態を保持できないので、外部から何らか断続的に変化する数値を使う必要があります。
+
+今回は、リングを大きくしたり小さくしたりしてみたいと思います。
+
+大きくしたり小さくしたりということは、数値の増減が一定の周期で往復している必要があります。
+
+これを実現するには、_Timeの値を使用して、sin,cosどちらかの関数を使用して数値を変化させるのがいいかと思います。
+
+今回はsinを使用します。
+
+- sin : -1 ~ 1
+
+ロジック的に、-1に動くことは正常な動作ではないの、1 ~ 0の間に数字が動くように`abs関数(絶対値)`を取るようにします。
+
+- 1 ~ -1
+  - マイナスへの動きがある分、リングが大きくなる動きを始めるまでワンテンポ遅れます
+    ![sinグラフ](./Images/sin%E3%82%B0%E3%83%A9%E3%83%95.png)
+
+    ![1から-1までの変化の場合](./Images/1%E3%81%8B%E3%82%89-1%E3%81%BE%E3%81%A7%E3%81%AE%E5%A4%89%E5%8C%96%E3%81%AE%E5%A0%B4%E5%90%88.gif)
+- 1 ~ 0
+  - 絶対値(abs)を撮っているためマイナスの場合プラスになるので、1 ~ -1の動きに比べて2倍の速度で動きます。
+    ![sin_absグラフ](./Images/sin_abs%E3%82%B0%E3%83%A9%E3%83%95.png)
+
+    ![1から0までの変化の場合](./Images/1%E3%81%8B%E3%82%890%E3%81%BE%E3%81%A7%E3%81%AE%E5%A4%89%E5%8C%96%E3%81%AE%E5%A0%B4%E5%90%88.gif)
 
 ```c#
-// Ringシェーダー
+Shader "DShader/Circle/Ring"
+{
+  Properties
+  {
+    _Radius("円の半径",Float) = 0
+    _RingSpeed("リング速度",Float) = 0
+    _Smallness("リングの小ささ",Float) = 0
+  }
+
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 200
+
+    CGPROGRAM
+    #pragma surface surf Standard fullforwardshadows
+    #pragma target 3.0
+
+    float _Radius;
+    float _RingSpeed;
+    float _Smallness;
+
+    struct Input
+    {
+      float3 worldPos;
+    };
+
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      float dist = distance(float3(0,0,0),IN.worldPos);
+
+      //  ベースの色をつける
+      o.Albedo = float4(1,0,0,1);
+
+      float s =abs(sin(_Time.y * _RingSpeed));
+
+      //  リングの最低サイズ
+      float minSize = 0.05f;
+
+      //  距離が指定した半径以内の場合、色を変更する
+      if(dist >= _Radius && dist <= (_Radius + s / _Smallness) + minSize){
+        o.Albedo = float4(1,1,1,1);
+      }
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+
 ```
 
-![リング動きシェーダー]()
+上記のシェーダーを使用してパラメーターをいい感じにするとこうなります。
+
+![リング動きシェーダー](./Images/%E3%83%AA%E3%83%B3%E3%82%B0%E5%AE%8C%E6%88%90.gif)
 
 ## 半径の謎
 
@@ -1260,6 +1333,9 @@ TODO : まとめる
 キューブの座標を0,0,0にしてもスケールが1,1,1のようになっていれば、原点からの高さも入るので想定より表示されている面の距離は遠くなる
 
 ![半径の謎の答え](./Images/%E5%8D%8A%E5%BE%84%E3%81%AE%E8%AC%8E%E3%81%AE%E7%AD%94%E3%81%88.gif)
+
+## Toonシェーダーを作る
+
 
 ## 今後調べたい内容
 
