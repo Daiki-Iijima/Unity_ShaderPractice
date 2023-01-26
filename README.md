@@ -1336,6 +1336,253 @@ Shader "DShader/Circle/Ring"
 
 ## Toonシェーダーを作る
 
+Toonシェーダーとは、
+
+- サーフェースシェーダーだけでは作れない
+  - 影をつける工程も記述する必要がある。
+
+  ```mermaid
+  graph
+
+  サーフェイスシェーダー -- サーフェイス処理 --> SurfaceOutputStandard -- 影の処理 --> Unityがよしなにやってくれる
+  Toonシェーダー -- サーフェイス処理 --> SurfaceOutput -- 影の処理 --> LightingXXX関数
+  ```
+
+- Rampテクスチャと呼ばれるテクスチャを使用する
+  - Rampテクスチャは使う色を定義してあるテクスチャ
+- `光源ベクトルとモデルの法線ベクトルから算出される内積の値`を、RampテクスチャのUV座標として使用し、影の表現を行う
+  - UV座標は、(0,0) ~ (1,1)までの間で表現されるので、内積(-1 ~ 1)の数値と単位化されているので相性がいい(マイナスになるときは裏側なので気にしなくていい)
+- 使用するテクスチャはClumpする必要がある
+  - [参考記事](https://3dcg-school.pro/unity-ramp-texture-shader/)
+
+- 内積のイメージ
+  - テクスチャの設定で、WrapModeを`Clamp`に設定しているので、0以下、1以上の場合は近い数字に丸められるので、モデルの下方向に向いている法線などは、内積の計算では、90度以上になり、マイナスになるので、丸められ、RampテクスチャのUV座標が0になるので一番暗い色が表示されます。
+  - ![内積のイメージ](./Images/%E5%86%85%E7%A9%8D%E3%81%AE%E3%82%A4%E3%83%A1%E3%83%BC%E3%82%B8.jpeg)
+- なぜ内積の結果に0.5をかけているのかと0.5を足しているのか
+  - 内積の結果をそのまま影としてつけると、影になる部分が大きくなりすぎてしまい、全体的に暗い印象になってしまうので、明るい部分を増やすために内積の結果を半分にして、0.5増やして、明るい範囲を増やしています。
+  - 内積そのままの結果
+    - この場合、黒い部分は、内積の結果が0または、コサインシータが90度以上で結果がマイナスになり、0にClumpされている部分になります。
+    ![内積そのまま](./Images/%E3%83%91%E3%83%A9%E3%83%A1%E3%83%BC%E3%82%BF%E3%83%BC0_1.png)
+
+  - 内積に0.5を足した
+    ![内積そのまま](./Images/%E5%86%85%E7%A9%8D%E3%81%AB0.5%E3%82%92%E8%B6%B3%E3%81%97%E3%81%9F.png)
+
+  - 内積に0.5をかけた結果
+    ![Rampイメージ5](./Images/0.5%E6%8E%9B%E3%81%91%E3%81%AE%E5%A0%B4%E5%90%88%E3%81%AE%E9%81%B8%E6%8A%9E%E7%AF%84%E5%9B%B2.png)
+    ![内積0.5](./Images/%E3%83%91%E3%83%A9%E3%83%A1%E3%83%BC%E3%82%BF%E3%83%BC0_0.5.png)
+
+  - 内積に0.5をかけて0.5を足した結果
+    ![Rampイメージ55](./Images/0.5%E6%8E%9B%E3%81%91%E3%81%A60.5%E8%B6%B3%E3%81%97%E3%81%9F%E7%AF%84%E5%9B%B2.png)
+    ![内積0.5+0.5](./Images/%E3%83%91%E3%83%A9%E3%83%A1%E3%83%BC%E3%82%BF%E3%83%BC_0.5_0.5.png)
+
+- 作成したコード
+
+  ```c#
+  Shader "DShader/Toon"
+  {
+    Properties
+    {
+      _Color ("Color", Color) = (1,1,1,1)
+      _MainTex ("Albedo (RGB)", 2D) = "white" {}
+      _RampTex ("Ramp", 2D) = "white" {}
+      _Shadow("影の量",float) = 0.5
+      _RampUseRange("テクスチャの使用する範囲",float) = 0.5
+    }
+    SubShader
+    {
+      Tags { "RenderType"="Opaque" }
+      LOD 200
+
+      CGPROGRAM
+      //  ライティングを使用するので、ライティング処理をフック(ToomRanp)
+      #pragma surface surf ToonRamp
+      #pragma target 3.0
+
+      sampler2D _MainTex;
+      sampler2D _RampTex;
+
+      struct Input
+      {
+        float2 uv_MainTex;
+      };
+
+      fixed4 _Color;
+      float _Shadow;
+      float _RampUseRange;
+
+      //  ライティングの設定を行う(Lightng+フックした変数名)
+      fixed4 LightingToonRamp(SurfaceOutput s,fixed3 lightDir,fixed atten){
+        //  光源ベクトルと、model法線の内積を求める
+        //  マイナスになった場合、テクスチャの設定でClumpされて、UV座標は0になる
+        half d = dot(s.Normal, lightDir) * _RampUseRange + _Shadow;
+        //  dはX軸,0.5はuv座標の中心を取得するために設定している
+        fixed3 ramp = tex2D(_RampTex,fixed2(d,0.5)).rgb;
+        fixed4 c;
+        //  モデルのテクスチャの色、ライトの光源の色、ランプテクスチャの色をかけ合わせて描画する色としている
+        c.rgb = s.Albedo * _LightColor0.rgb * ramp;
+        c.a = 0;
+        return c;
+      }
+
+      void surf (Input IN, inout SurfaceOutput o)
+      {
+        //  テクスチャの色を取得
+        fixed4 c = tex2D (_MainTex, IN.uv_MainTex) * _Color;
+        o.Albedo = c.rgb;
+        o.Alpha = c.a;
+      }
+      ENDCG
+    }
+    FallBack "Diffuse"
+  }
+  ```
+
+---
+
+## 頂点カラーの表示
+
+頂点カラーは、modelに対して、色情報をもたせることができる仕様です。
+
+今回は、Blenderで頂点カラーを持っているオブジェクトを作成して、Unity内で表示できるシェーダーを作成して表示してみます。
+
+### Blenderで頂点カラーを持ったmodelを作成する手順
+
+- fbx形式のデフォルト設定の書き出しでUnityに取り込めばうまく読み込めた
+  - 以下、自分の環境ではうまく行かなかった
+    - 書き出しは、ob形式で以下の画像のようにチェックボックスにチェックを入れる必要があります。
+    - 出力されたデータとしては、色情報が入っているが、Unityではうまく読み込めなかったので、fbx形式での書き出しを推奨(1日立ったら読み込めた。。謎)
+      ![modelの色を追加](./Images/Blender%E9%A0%82%E7%82%B9%E3%82%AB%E3%83%A9%E3%83%BC%E3%81%AE%E5%87%BA%E5%8A%9B.png)
+
+![Blender頂点カラー](./Images/Blender%E9%A0%82%E7%82%B9%E3%82%AB%E3%83%A9%E3%83%BC.png)
+
+### Unity内での表示
+
+頂点カラーを表示するには、modelから頂点カラー情報を取得する必要があります。SurfaceShaderだけでは、modelから頂点カラー情報を取得できないので、`VertexShader`も使う必要があります。
+
+Shaderの処理の流れ(パイプライン)は以下のような流れになっています。
+
+```mermaid
+graph LR
+
+Vertex --> Surface --> Lighting
+
+```
+
+一番最初の工程、`Vertex`の処理が頂点(Vertex)を処理します。
+
+今回やりたいことは頂点カラー(Vertex Color)なので、頂点関係の情報が必要なことがわかります。
+
+UnityのShaderでVertex情報を扱うためには、今までのSurfaceShaderに以下のような処理を追加する必要があります。
+
+- paragmaにvert : xxxを追加
+- xxx関数を作成
+- Surface関数の
+
+以下が最小のSurfaceShaderです。
+
+```c#
+Shader "DShader/Simple/Simple"
+{
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 200
+
+    CGPROGRAM
+    #pragma surface surf Standard fullforwardshadows
+    #pragma target 3.0
+
+    struct Input
+    {
+      float2 uv_MainTex;
+    };
+
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      o.Albedo = fixed4(1.0f,1.0f,1.0f,1);
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+```
+
+このShaderを以下のように変更します。(追加した行にはコメントが付いています。)
+
+```c#
+Shader "DShader/VertexColor"
+{
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 200
+
+    CGPROGRAM
+    #pragma surface surf Standard fullforwardshadows
+    #pragma vertex:vert //  追加 : 頂点情報を使う関数を定義
+    #pragma target 3.0
+
+    struct Input
+    {
+      float4 vertColor;
+    };
+
+    // ---- 追加 : Vertex情報を扱う関数(pragmaで定義している)----
+    void vert(inout appdata_full v, out Input o){
+      UNITY_INITIALIZE_OUTPUT(Input,o);
+      o.vertColor = v.color;
+    }
+    //  ------------
+
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      o.Albedo = IN.vertColor.rgb;
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+```
+
+input構造体を見てみると、見覚えのない変数が定義されています。
+
+これは、以下の図のように、Vertex処理とSurface処理の情報を受け渡しするための変数になります。
+
+今回は、Lighting処理はUnityのデフォルト処理に投げていますが、この処理をフックする事もできます。
+
+```mermaid
+graph LR
+
+Vertex -- Input構造体 --> Surface -- SurfaceOutputStandard構造体 --> Lighting
+```
+
+では、Vertex処理が何をしているか見ていきましょう。Vertex処理は、vert関数で行うことを定義しているので、以下の関数の部分がVertex処理になります。
+
+```c#
+void vert(inout appdata_full v, out Input o){
+  //  初期化出力する値を初期化
+  UNITY_INITIALIZE_OUTPUT(Input,o);
+  //  modelから取得した頂点カラー情報を次のSurfaceに伝えるためにInput構造体に代入
+  o.vertColor = v.color;
+}
+```
+
+- appdata_full : Unityが定義している構造体、他にもあるので以下リンクを参照
+  - [Unityのシェーダーセマンティクスまとめ](https://qiita.com/sune2/items/fa5d50d9ea9bd48761b2)
+  - セマンティクス : 変数の用途の説明、上のリンクにも解説が書いてある
+- UNITY_INITIALIZE_OUTPUT(type,name) : Input構造体の値を初期化している,おまじない的にやっている処理
+
+```c#
+o.Albedo = IN.vertColor.rgb;
+```
+
+- Vertex処理から受け取った色情報を反映
+
+![頂点カラーUnity](./Images/Unity%E9%A0%82%E7%82%B9%E3%82%AB%E3%83%A9%E3%83%BC.png)
+
+---
+
+## 頂点を動かしてmodelを変形させる
 
 ## 今後調べたい内容
 
@@ -1358,7 +1605,13 @@ Shader "DShader/Circle/Ring"
 - [ ] シェーダーで組み込み関数についてまとめる
   - DirectX HLSLの組み込み関数が一通り使えるっぽい
   - [組み込み関数(DirectX HLSL)](https://hlslref.wiki.fc2.com/)
+- [ ] 定義されているプリプロセッサーマクロの使いみちをまとめる
+  - [Unity公式 : 定義済みシェーダープリプロセッサーマクロ](https://docs.unity3d.com/ja/2019.4/Manual/SL-BuiltinMacros.html)
 
 ## メインで参考にしているサイト
 
 - [7日間でマスターするUnityシェーダ入門](https://nn-hokuson.hatenablog.com/entry/2018/02/15/140037)
+
+## 便利サイト
+
+- [数学からグラフ生成用のサイト](https://www.geogebra.org/graphing?lang=ja)

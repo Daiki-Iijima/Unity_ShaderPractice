@@ -71,9 +71,9 @@ Material:
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
-    - _Radius: 3
-    - _RingSpeed: 16.53
-    - _Smallness: 20
+    - _Radius: 0.42
+    - _RingSpeed: 2.25
+    - _Smallness: 7.57
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
