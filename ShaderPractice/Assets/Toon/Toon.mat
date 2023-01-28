@@ -33,8 +33,8 @@ Material:
     - _Glossiness: 0.5
     - _Knwnon: 0.5
     - _Metallic: 0
-    - _RampUseRange: 0.99
-    - _Shadow: 0.83
+    - _RampUseRange: 0.73
+    - _Shadow: 0.74
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

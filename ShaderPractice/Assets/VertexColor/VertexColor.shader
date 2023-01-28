@@ -6,8 +6,7 @@ Shader "DShader/VertexColor"
     LOD 200
 
     CGPROGRAM
-    #pragma surface surf Standard 
-    #pragma vertex:vert
+    #pragma surface surf Standard vertex:vert
     #pragma target 3.0
 
     //  vertex関数とsurface関数の連絡用構造体

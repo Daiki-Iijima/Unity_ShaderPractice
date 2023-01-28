@@ -1450,7 +1450,7 @@ Toonシェーダーとは、
 - fbx形式のデフォルト設定の書き出しでUnityに取り込めばうまく読み込めた
   - 以下、自分の環境ではうまく行かなかった
     - 書き出しは、ob形式で以下の画像のようにチェックボックスにチェックを入れる必要があります。
-    - 出力されたデータとしては、色情報が入っているが、Unityではうまく読み込めなかったので、fbx形式での書き出しを推奨(1日立ったら読み込めた。。謎)
+    - 出力されたデータとしては、色情報が入っているが、Unityではうまく読み込めなかったので、fbx形式での書き出しを推奨
       ![modelの色を追加](./Images/Blender%E9%A0%82%E7%82%B9%E3%82%AB%E3%83%A9%E3%83%BC%E3%81%AE%E5%87%BA%E5%8A%9B.png)
 
 ![Blender頂点カラー](./Images/Blender%E9%A0%82%E7%82%B9%E3%82%AB%E3%83%A9%E3%83%BC.png)
@@ -1580,9 +1580,32 @@ o.Albedo = IN.vertColor.rgb;
 
 ![頂点カラーUnity](./Images/Unity%E9%A0%82%E7%82%B9%E3%82%AB%E3%83%A9%E3%83%BC.png)
 
+### 注意
+
+以下のpragmaを定義しているところを複数行に分割するとうまく動かなくなる
+
+- Good
+
+  ```c#
+  #pragma surface surf Standard vertex:vert
+  ```
+
+- Bad
+
+  ```c#
+  #pragma surface surf Standard 
+  #pragma vertex:vert
+  ```
+
 ---
 
 ## 頂点を動かしてmodelを変形させる
+
+- 頂点を動かすには、
+
+![ウェーブ](./Images/%E3%82%A6%E3%82%A7%E3%83%BC%E3%83%96.gif)
+
+![ページを捲る]()
 
 ## 今後調べたい内容
 
