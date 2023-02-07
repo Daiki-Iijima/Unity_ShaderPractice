@@ -1439,6 +1439,73 @@ Toonシェーダーとは、
 
 ---
 
+## 雪を表現する
+
+内積を使用して、雪の降っている方向(今回は、真上)とモデルの法線の内積を計算することで、雪が当たる範囲を実際の積もり方と似せることができます。
+
+この内積で求めた数値を今回は、`降り積もり値`とします。
+
+```c#
+降り積もり値 = モデルの法線 ・ 雪が降る方向
+```
+
+この降り積もり値をモデルのピクセルごとのテクスチャの色に対して`lerp補完`をすることで雪が降り積もったような色合いの変化を表現することができます。
+
+```c#
+Shader "Custom/Snow"
+{
+  Properties
+  {
+    _SnowColor ("雪の色", Color) = (1,1,1,1)
+    _MainTex ("Albedo (RGB)", 2D) = "white" {}
+    _SnowValue("雪のポイント",Float) = 0
+  }
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 200
+
+    CGPROGRAM
+    // Physically based Standard lighting model, and enable shadows on all light types
+    #pragma surface surf Standard fullforwardshadows
+
+    // Use shader model 3.0 target, to get nicer looking lighting
+    #pragma target 3.0
+
+    sampler2D _MainTex;
+
+    struct Input
+    {
+      float2 uv_MainTex;
+      float3 worldNormal;
+    };
+
+    fixed4 _SnowColor;
+    float _SnowValue;
+
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      //  雪のつもり度を内積で算出
+      //  dot(モデルの法線,雪の降る方向)
+      float snowPoint = dot(IN.worldNormal,fixed3(0,1,0));
+
+      //  テクスチャの色を取得
+      fixed4 texColor = tex2D (_MainTex, IN.uv_MainTex);
+
+      //  雪の色と
+      float4 snowColor = lerp(texColor,_SnowColor,snowPoint + _SnowValue);
+
+      o.Albedo = snowColor;
+      o.Alpha = texColor.a;
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+```
+
+![Snow](./Images/Snow.gif)
+
 ## 頂点カラーの表示
 
 頂点カラーは、modelに対して、色情報をもたせることができる仕様です。
@@ -1601,11 +1668,442 @@ o.Albedo = IN.vertColor.rgb;
 
 ## 頂点を動かしてmodelを変形させる
 
-- 頂点を動かすには、
+- 頂点を動かすには、頂点シェーダー処理(vert関数)が毎頂点ごとに呼ばれるので、それらの頂点座標の初期値の入力に対して、vert関数から次の処理への出力までに座標を変化させることで表示される頂点位置が動くことになります。
+- 頂点シェーダーに入ってくる情報は、modelから取得できる情報になります。
+  - 自分で入力されてくる情報を定義する(絞り込む)こともできますが、Unityがデフォルトで定義している構造体を使うのが一般的
+    - [Unityが定義している構造体についてのまとめ](https://qiita.com/sune2/items/fa5d50d9ea9bd48761b2)
+    - [FVFフォーマットについて](http://doc.51windows.net/directx9_sdk/graphics/programmingguide/GettingStarted/VertexFormats/vformats.htm)
+
+- 処理順
+
+  ```mermaid
+  graph TD
+
+  model情報 --> 頂点処理 --> Surface処理 --> Lighting処理
+  ```
+
+### vert関数の定義
+
+- 頂点処理をUnity標準の処理ではなく、自力で実装する場合、以下のような記述を追加することでできます。
+  - `vertex:頂点処理関数名`を`#pragma`行に追記
+  - `surface処理`と`vertex処理`で共有するデータ構造体を定義する
+
+  ```c#
+  Shader "DShader/Vertex/Flipping"
+  {
+    Properties {
+      //  ..省略
+    }
+
+    SubShader
+    {
+      //  ..省略
+
+      //  vertex:vertを追加 
+      #pragma surface surf Standard vertex:vert
+
+      //  vert関数とsurf関数で共有するデータを保持する構造体
+      struct Input
+      {
+        float2 uv_MainTex;
+      };
+
+      //  頂点シェーダー
+      void vert(inout appdata_full v, out Input o )
+      {
+        //  次の処理(surface)にわたすための変数の初期化
+        UNITY_INITIALIZE_OUTPUT(Input, o);
+      }
+
+      //  surfaceシェーダー
+      void surf (Input IN, inout SurfaceOutputStandard o)
+      {
+      }
+      ENDCG
+    }
+    FallBack "Diffuse"
+  }
+  ```
+
+### 頂点シェーダーで板をウェーブさせてみる
+
+- sin関数と経過時間を使用して、ウェーブを表現する
+
+- Cull off : カリング処理を行わないようにする
+  - Cull Back | Front | Off
+  - ポリゴンのどちら側をカリングする（描画しない）か制御。
+    - Back : 視点と反対側のポリゴンをレンダリングしないようにします。 (デフォルト) 
+    - Front : 視点と同じ側のポリゴンをレンダリングしない。オブジェクトを反転するのに使用します。
+    - Off  :カリングを無効にして、すべての面を描画します。特殊なエフェクトで使用します。
+
+```c#
+Shader "DShader/Vertex/Wave"
+{
+  Properties {
+  }
+
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 100
+    Cull off
+
+    CGPROGRAM
+    #pragma surface surf Standard vertex:vert
+    #pragma target 3.0
+
+    struct Input
+    {
+      float2 uv_MainTex;
+    };
+
+    //  頂点シェーダー
+    void vert(inout appdata_full v, out Input o )
+    {
+      //  初期化
+      UNITY_INITIALIZE_OUTPUT(Input, o);
+
+      //  頂点の位置を加味することで出力される座標を動かす
+      float amp = sin(_Time.y * 5 + v.vertex.x);
+
+      //  座標を動かす
+      v.vertex.xyz = float3(v.vertex.x,v.vertex.y + amp,v.vertex.z);
+    }
+
+    //  surfaceシェーダー
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      o.Albedo = float4(1,1,1,1);
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+```
 
 ![ウェーブ](./Images/%E3%82%A6%E3%82%A7%E3%83%BC%E3%83%96.gif)
 
-![ページを捲る]()
+### ページを捲る
+
+```c#
+Shader "DShader/Vertex/Flipping"
+{
+  Properties {
+    _MainTex("メインテクスチャ",2D) ="wihte"{}
+    _WaveSpeed("ウェーブの速度",Float) = 1
+    _WaveDepth("ウェーブの深さ",Float) = 1
+  }
+
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 100
+    Cull off
+
+    CGPROGRAM
+    #pragma surface surf Standard vertex:vert
+    #pragma target 3.0
+
+    sampler2D _MainTex;
+
+    struct Input
+    {
+      float2 uv_MainTex;
+    };
+
+    float _WaveSpeed;
+    float _WaveDepth;
+
+    //  頂点シェーダー
+    void vert(inout appdata_full v, out Input o )
+    {
+      UNITY_INITIALIZE_OUTPUT(Input, o);
+
+      //  0 ~ 1までの範囲の値を使用
+      float s = abs(sin(_Time.y));
+      
+      //  開ききったら固定する
+      //  コメントアウトすると、動き続けてピラピラする
+      if(_Time.y > 1.5f){
+        s = 1;
+      }
+      
+      float y = (s * (v.vertex.x + 5)) * 0.8f;
+      //  yの値が増えるほどx軸が右側に動くように
+      float x = v.vertex.x - (pow(y * 2,2.2f) / 50) ;
+
+      v.vertex.xyz = float3(x, y, v.vertex.z);
+    }
+
+    //  surfaceシェーダー
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      float4 c = tex2D(_MainTex,IN.uv_MainTex);
+      o.Albedo = c;
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+```
+
+![ページを捲る](./Images/%E3%83%9A%E3%83%BC%E3%82%B8%E3%82%81%E3%81%8F%E3%82%8A.gif)
+
+### 波打つゲージを作る
+
+```c#
+Shader "Custom/WaveUp"
+{
+  Properties
+  {
+    _Color ("Color", Color) = (1,1,1,1)
+    _MainTex ("Albedo (RGB)", 2D) = "white" {}
+    _Glossiness ("Smoothness", Range(0,1)) = 0.5
+    _Metallic ("Metallic", Range(0,1)) = 0.0
+    _Value("進捗度",Float) = 0
+  }
+  SubShader
+  {
+    Tags { "RenderType"="Opaque" }
+    LOD 200
+
+    CGPROGRAM
+    // Physically based Standard lighting model, and enable shadows on all light types
+    #pragma surface surf Standard vertex:vert
+
+    // Use shader model 3.0 target, to get nicer looking lighting
+    #pragma target 3.0
+
+    sampler2D _MainTex;
+
+    struct Input
+    {
+      float2 uv_MainTex;
+    };
+
+    half _Glossiness;
+    half _Metallic;
+    fixed4 _Color;
+    float _Value;
+
+    float rand(float2 co) //引数はシード値と呼ばれる　同じ値を渡せば同じものを返す
+    {
+      return frac(sin(dot(co.xy, float2(12.9898, 78.233))) * 43758.5453);
+    }
+
+    //  頂点シェーダー
+    void vert(inout appdata_full v, out Input o )
+    {
+      UNITY_INITIALIZE_OUTPUT(Input, o);
+
+      float s = sin(_Time.w + v.vertex.x);
+
+      //  モデルを_Value分動かす
+      v.vertex.xyz = float3(v.vertex.x,v.vertex.y,v.vertex.z - 2 + clamp(_Value,0,1) * 2);
+
+      //  自動で増加させる
+      // v.vertex.xyz = float3(v.vertex.x,v.vertex.y,v.vertex.z - 2 +clamp(_Time.w / 20,0,1) * 2);
+
+      //  一番より大きい場合、ウェーブさせる
+      if(v.vertex.z > -1){
+        v.vertex.z += (pow(s,2) / 4);
+      }
+
+      // モデルの上部より上にウェーブが行かないようにする
+      if(v.vertex.z > 1){
+        v.vertex.z = 1;
+      }
+
+      //  モデルの下からはみ出ないようにする 
+      if(v.vertex.z <= -1){
+        v.vertex.z = -1;
+      }
+    }
+
+    // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
+    // See https://docs.unity3d.com/Manual/GPUInstancing.html for more information about instancing.
+    // #pragma instancing_options assumeuniformscaling
+    UNITY_INSTANCING_BUFFER_START(Props)
+    // put more per-instance properties here
+    UNITY_INSTANCING_BUFFER_END(Props)
+
+    void surf (Input IN, inout SurfaceOutputStandard o)
+    {
+      // Albedo comes from a texture tinted by color
+      fixed4 c = tex2D (_MainTex, IN.uv_MainTex) * _Color;
+      o.Albedo = c.rgb;
+      // Metallic and smoothness come from slider variables
+      o.Metallic = _Metallic;
+      o.Smoothness = _Glossiness;
+      o.Alpha = c.a;
+    }
+    ENDCG
+  }
+  FallBack "Diffuse"
+}
+```
+
+![波打つゲージ](./Images/WaveUp.gif)
+
+---
+
+## Depthバッファーを使いこなす
+
+デプスバッファとは、Unityのカメラからモデルまでの距離(奥行き具合)を表現する値のことです。
+
+これらの値が、Unityでは`1 ~ 0`の範囲で取得する事ができます。
+
+- 0 : カメラからの距離が近い
+- 1 : カメラからの距離が遠いい
+
+このデプスバッファの値は画面の各ピクセルごとに値を持っているので、この値をもとにカメラは描画するモデルのどの位置がどう隠れているか(奥行き)を表現します。
+
+### デプスバッファーの値を可視化してみる
+
+### モデルでモデルをくり抜いてくり抜いたモデルは透過させる
+
+当たり前ですが、これを実現するには、2つのモデルが必要になります。
+
+この処理で重要なのは、`透過させる(くり抜く側)のモデル`の処理になります。描画はせずに、モデルのある位置のみ後ろにあるモデルは描画しないようにするには、`デブスバッファにのみモデルの位置を書き込み、描画はしない`処理を行うことで表現できます。
+
+完成イメージはこのようなものになります。
+
+![くり抜きイメージ](./Images/CutoutImage.png)
+
+この画像には、3種類のモデルが手前から順番に以下のように並んでいます。
+
+1. くり抜くモデル
+2. くり抜かれるモデル
+3. くり抜かれないモデル
+
+デプスバッファに`1のくり抜くモデルの位置`を書き込んでしまうと、それより後ろ側にあるモデルは、以下の画像のように全てくり抜かれてしまいます。
+
+![全てくり抜かれるイメージ](./Image/../Images/AllCutoutImage.png)
+
+2の対象のモデルはくり抜かれてもいいですが、その後ろの背景まではくり抜いてほしくありません。そんなときに使用するのが、`Render Queue`プロパティになります。
+
+Unityでは、Render Queueの数値の小さい順から順に描画(処理)していきます。つまり、くり抜くモデルの情報が処理される(デプスバッファに書き込まれる)前に描画してしまえば、理想的な絵になるということです。
+
+この`Render Queue`はマテリアルとShaderのどちらでも設定することができます。優先度は、Material > Shaderの順になり、MaterialでRender Queueが設定されてない場合は、Shaderで指定されている値を使用する用になっています
+
+- [参考](https://light11.hatenadiary.com/entry/2018/05/26/185954)
+
+![RenderQueue設定項目](./Images/RenderQueue%E8%A8%AD%E5%AE%9A%E9%A0%85%E7%9B%AE.png)
+
+- 値が小さい : 手前
+- 値が大きい : 奥
+
+という数値の関係性があります。Unityはこの数値をもとにモデルを描画をしていきます。
+
+なので、この設定を、以下のような値に設定します。
+
+くり抜かれたくないモデルを最初に描画(処理)することで、くり抜くモデルのDepthバッファ情報が入ってくる前に描画する事ができます。
+
+1. くり抜くモデル : くり抜かれるモデルよりも先に処理 : 1999
+2. くり抜かれるモデル : 最後に描画 : 2000
+3. くり抜かれないモデル : 最初に描画 : 1998
+
+### くり抜くモデル用のShdaer
+
+- このShaderは、くり抜き用のモデルに使います。
+- Passで囲っているということは、これはFragmentShaderになります。
+- 今回は、テクスチャなどを描画しないのでFragmentShaderを使う方法が一番シンプルに記述することができます。
+
+```c#
+Shader "Custom/Cut"
+{
+  Properties
+  {
+  }
+  SubShader
+  {
+    Tags { "Queue"="Geometry-1" }
+
+    Pass{
+      //  デプスバッファに書き込む
+      Zwrite On
+      //  描画チャネルを指定
+      //  0はRGBすべてのチャネルを表示しない
+      ColorMask 0
+    }
+  }
+}
+```
+
+- Passブロックを使用して記述しない場合(Surfaceシェーダーを使用する場合)、最低でもこれだけの記述がSubShader内に必要になります。
+
+  ```c#
+  Shader "Custom/Cut"
+  {
+    SubShader
+    {
+      Tags { 
+        "Queue"="Geometry-1"
+        "ForceNoShadowCasting" = "True"
+      }
+
+      //  デプスバッファに書き込む
+      Zwrite On
+      //  描画チャネルを指定
+      //  0はRGBすべてのチャネルを表示しない
+      ColorMask 0
+
+      CGPROGRAM
+      #pragma surface surf Standard fullforwardshadows
+      #pragma target 3.0
+
+      struct Input
+      {
+        float2 uv_MainTex;
+      };
+
+      void surf (Input IN, inout SurfaceOutputStandard o)
+      {
+        o.Albedo = fixed4(1.0f,1.0f,1.0f,1);
+      }
+      ENDCG
+    }
+
+    FallBack "Diffuse"
+  }
+  ```
+
+### Passブロックについて
+
+Passブロックは、`Pass{}`のカッコ内に書かれている情報についての情報になります。
+
+- [公式ドキュメント](https://docs.unity3d.com/ja/2021.2/Manual/SL-Pass.html)
+
+また、以下のようにTagを使用してPassに名前をつけることもできます。名前がついているPassは他のShaderで使用することができます。(再利用可能になる)
+
+```c#
+Pass{
+  Name "ExampleNamedPass"
+
+  //  その後の処理
+}
+```
+
+このPassブロック内では、`基本的にSubShaderと同じ内容の処理が記述`できます。
+
+しかし、SubShaderは1つのShader内に1つしか使用できない(プラットフォームごとの動作分利用のSubShader以外)のに対して、PassブロックはSubShader内で複数のPassを定義することができます。
+
+また、SubShaderにPassと明示的に記述していなくても内部では1つのPassとして処理されます。
+
+このPassの特徴を使うことで、1つのPassで出力した結果を2つめのPassに渡してそれを再度処理して、最終的な出力にするような処理を書くことができるようになっています。
+
+しかし、Passを使いすぎると、描画処理が複雑になり、ゲームが重くなる原因にもなるので、理想としてはPassは少なく抑えたほうがいいです。
+
+C#的に説明すると、SubShaderに直接処理を書くのがエントリーポイント関数に直接書いていることで、Passが関数にくくりだしているというイメージになります。なので、1パスのシェーダーでも、Passブロックに囲っておくと、似たようなShaderで少し変更したい場合などに、処理の使い回しがしやすくなったりします。
+
+---
+
+## SurfaceShaderとFragmentShaderの違いについて
+
+SurfaceShaderはPassを書くことができません。
+
+ある程度決まった流れに沿ってコードを記述する必要があります。
+
 
 ## 今後調べたい内容
 
@@ -1630,6 +2128,8 @@ o.Albedo = IN.vertColor.rgb;
   - [組み込み関数(DirectX HLSL)](https://hlslref.wiki.fc2.com/)
 - [ ] 定義されているプリプロセッサーマクロの使いみちをまとめる
   - [Unity公式 : 定義済みシェーダープリプロセッサーマクロ](https://docs.unity3d.com/ja/2019.4/Manual/SL-BuiltinMacros.html)
+- [ ] Shaderについての解説動画 Unite2017
+  - [Youtubeリンク](https://www.youtube.com/watch?v=vv1DTGKnMuE&ab_channel=UnityJapan)
 
 ## メインで参考にしているサイト
 
